@@ -6,7 +6,8 @@ RUN apt-get update && \
     apt-get install -y software-properties-common python-software-properties && \
     add-apt-repository ppa:mc3man/trusty-media -y && \
     apt-get update && \
-    apt-get install -y ffmpeg gstreamer0.10-ffmpeg
+    apt-get install -y ffmpeg gstreamer0.10-ffmpeg && \
+    apt-get install -y supervisor
 
 RUN sudo pip install SQLAlchemy==1.0.0 && \
     sudo pip install wsgilog==0.3 && \
@@ -35,22 +36,18 @@ COPY config/apache2.conf /etc/apache2/apache2.conf
 RUN sudo cp /etc/apache2/mods-available/headers.load /etc/apache2/mods-enabled && \
     sudo apache2ctl graceful
 
-COPY config/config.py /root/vatic/config.py
+COPY config/config.anatolix.py /root/vatic/config.py
 
-# We need to adjust some of these guys's import statements...
 RUN sed  -i'' "s/import Image/from PIL import Image/" \
-    /usr/local/lib/python2.7/dist-packages/pyvision-0.3.1-py2.7-linux-x86_64.egg/vision/frameiterators.py \
-    /usr/local/lib/python2.7/dist-packages/pyvision-0.3.1-py2.7-linux-x86_64.egg/vision/ffmpeg.py \
-    /usr/local/lib/python2.7/dist-packages/pyvision-0.3.1-py2.7-linux-x86_64.egg/vision/visualize.py \
     /root/vatic/models.py \
-    /root/vatic/cli.py \
-    /usr/local/lib/python2.7/dist-packages/pyvision-0.3.1-py2.7-linux-x86_64.egg/vision/pascal.py
+    /root/vatic/cli.py
 
 RUN sudo /etc/init.d/mysql start && \
     cd /root/vatic && \
     mysql -u root --execute="CREATE DATABASE vatic;" && \
     turkic setup --database && \
-    turkic setup --public-symlink
+    turkic setup --public-symlink && \
+    sudo /etc/init.d/mysql stop 
 
 RUN sudo chown -R 755 /root/vatic/public && \
     find /root -type d -exec chmod 775 {} \; && \
@@ -66,7 +63,14 @@ COPY ascripts /root/vatic/ascripts
 COPY scripts /root/vatic
 # moved to the end to make troubleshooting quicker
 
+RUN mkdir -p /var/log/supervisor
+COPY supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
 # Prepare workspace for use
 EXPOSE 80 443
 # VOLUME ["/var/www", "/var/log/apache2", "/etc/apache2"]
-# ENTRYPOINT ["/root/vatic/startup.sh"]
+CMD ["/usr/bin/supervisord","-n","-c","/etc/supervisor/conf.d/supervisord.conf"]
+
+
+
+
